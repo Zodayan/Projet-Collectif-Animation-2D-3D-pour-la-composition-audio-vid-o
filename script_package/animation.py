@@ -1,3 +1,5 @@
+import re
+
 import bpy
 import os
 import wave
@@ -58,14 +60,12 @@ def main():
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete()
 
-    # Ajouter un cube
-    bpy.ops.mesh.primitive_cube_add(size=2, location=(0, 0, 0))
-    cube = bpy.context.object  # Récupérer une référence à l'objet
-
-    # Modifier les propriétés du matériau
-    material = bpy.data.materials.new(name="CustomMaterial")
-    material.diffuse_color = (1.0, 0.0, 0.0, 0.5)  # Rouge
-    bpy.context.object.data.materials.append(material)
+    # Ajoute l'objet "poisson.glb" dans la scene
+    filepath = "../objets3D/poisson.glb"
+    bpy.ops.import_scene.gltf(filepath=filepath)
+    objet = bpy.context.selected_objects[0]
+    objet.location = (0, 0, 0)
+    objet.rotation_euler  = (0, 0, 0)
 
     # Étape 2 : Animer l'objet
     scene = bpy.context.scene
@@ -73,11 +73,11 @@ def main():
     for frame in range(nb_keyframes_animation):
 
         if frame == 0:
-            cube.location = (0, 0, int_buffer[frame]/max(int_buffer))
-            cube.keyframe_insert("location", frame=1)
+            objet.location = (0, 0, int_buffer[frame]/max(int_buffer))
+            objet.keyframe_insert("location", frame=1)
         else:
-            cube.location = (0, 0, int_buffer[frame]/max(int_buffer))
-            cube.keyframe_insert("location", frame=(frame * frame_end / nb_keyframes_animation))
+            objet.location = (0, 0, int_buffer[frame]/max(int_buffer))
+            objet.keyframe_insert("location", frame=(frame * frame_end / nb_keyframes_animation))
 
     # On fait en sorte que l'animation ne dure que 100 frames
     bpy.context.scene.frame_end = frame_end
@@ -108,7 +108,7 @@ def main():
     # Configurer le rendu
     bpy.context.scene.render.image_settings.file_format = 'FFMPEG'
     # On doit récupérer le current working directory, sinon l'animation va se créer à la racine de C:\
-    bpy.context.scene.render.filepath = os.getcwd() + "/animation_cube.mp4"
+    bpy.context.scene.render.filepath = "".join(re.split("(\\\)", (os.getcwd()))[:-1]) + "animations/animation_objet.mp4"
     bpy.context.scene.render.ffmpeg.format = 'MPEG4'
     bpy.context.scene.render.ffmpeg.codec = 'H264'
     #scene.cycles.device = 'GPU' # Pour utiliser le GPU
