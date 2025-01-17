@@ -1,18 +1,58 @@
 import bpy
-import math
 import os
 import wave
-from wave import Wave_read
+import numpy as np
+
+FRAMERATE_VIDEO = 24
 
 def main():
+    """
+    # Activer le GPU
+    bpy.context.scene.render.engine = 'CYCLES'
+    bpy.context.preferences.addons['cycles'].preferences.compute_device_type = 'OPTIX'  # Ou 'CUDA'
+    bpy.context.preferences.addons['cycles'].preferences.get_devices()
+
+    # Activer tous les GPU disponibles
+    for device in bpy.context.preferences.addons['cycles'].preferences.devices:
+        device.use = True
+    """
+
+    #####################################
+    # PARTIE RECUPERATION DE LA MUSIQUE #
+    #####################################
+
     # Ouverture du fichier wav en read-only
     sound = wave.open("StarWarsMini.wav", "rb")
+
+    # Récupération des informations sur le son
     frame_per_sec = sound.getframerate()
+    nb_frames = sound.getnframes()
+    sample_width = sound.getsampwidth()
+    nb_channels = sound.getnchannels()
+    sound_duration = nb_frames / frame_per_sec
+
+    # On calcule le nombre d'octets présents dans le son
+    nb_bytes = nb_frames * nb_channels * sample_width
+
+    # Récupération du son sous forme de tableau d'octets
     buffer = sound.readframes(sound.getnframes())
-    nb_frames = 50
-    frame_end =  int(len(buffer)/frame_per_sec * 24)//2 # *24 car animation a 24 fps
-    int_buffer = [(buffer[i] / 256 * 44.1 * 1000) - 44.1 * 1000 / 2 for i in
-                  range(0, len(buffer), len(buffer) // nb_frames)]
+
+    # On ferme le fichier ouvert précédemment pour libérer la ressource
+    sound.close()
+
+    # Transformation du buffer d'entiers 8-bits en buffer d'entiers 16-bits signés
+    buffer = np.frombuffer(buffer, dtype=np.int16)
+
+    # Définition des paramètres d'animation en fonction de la musique
+    nb_keyframes_animation = 50
+    frame_end =  int(sound_duration * FRAMERATE_VIDEO) # n° de la frame de fin pour l'animation
+    # Définition du buffer contenant les valeurs d'intensité des échantillons du son au moment des keyframes (d'amplitude frame_per_sec et centré en 0)
+    int_buffer = [(buffer[i] / 256 * frame_per_sec) - frame_per_sec / 2 for i in
+                  range(0, len(buffer), len(buffer) // nb_keyframes_animation)]
+
+    ####################
+    # PARTIE ANIMATION #
+    ####################
 
     # Supprimer tous les objets de la scène
     bpy.ops.object.select_all(action='SELECT')
@@ -24,23 +64,20 @@ def main():
 
     # Modifier les propriétés du matériau
     material = bpy.data.materials.new(name="CustomMaterial")
-    material.diffuse_color = (1.0, 0.0, 0.0, 1.0)  # Rouge
+    material.diffuse_color = (1.0, 0.0, 0.0, 0.5)  # Rouge
     bpy.context.object.data.materials.append(material)
 
     # Étape 2 : Animer l'objet
     scene = bpy.context.scene
 
-    for frame in range(nb_frames):
+    for frame in range(nb_keyframes_animation):
 
         if frame == 0:
             cube.location = (0, 0, int_buffer[frame]/max(int_buffer))
             cube.keyframe_insert("location", frame=1)
         else:
             cube.location = (0, 0, int_buffer[frame]/max(int_buffer))
-            cube.keyframe_insert("location", frame=(frame * frame_end / nb_frames))
-
-    # On ferme le fichier ouvert précédemment pour libérer la ressource
-    sound.close()
+            cube.keyframe_insert("location", frame=(frame * frame_end / nb_keyframes_animation))
 
     # On fait en sorte que l'animation ne dure que 100 frames
     bpy.context.scene.frame_end = frame_end
@@ -74,11 +111,12 @@ def main():
     bpy.context.scene.render.filepath = os.getcwd() + "/animation_cube.mp4"
     bpy.context.scene.render.ffmpeg.format = 'MPEG4'
     bpy.context.scene.render.ffmpeg.codec = 'H264'
+    #scene.cycles.device = 'GPU' # Pour utiliser le GPU
 
     # Activer le son dans le rendu
     scene.render.ffmpeg.audio_codec = 'AAC'  # Codec audio (AAC est largement compatible)
     scene.render.ffmpeg.audio_bitrate = 192  # Définir le bitrate audio (en kbps)
-    scene.render.ffmpeg.audio_mixrate = 44100
+    scene.render.ffmpeg.audio_mixrate = frame_per_sec
     scene.render.ffmpeg.audio_channels = 'MONO'
 
     # Rendre l'animation
