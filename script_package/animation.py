@@ -83,12 +83,22 @@ def main():
     bpy.context.scene.frame_end = frame_end
 
     # Ajouter une caméra
-    bpy.ops.object.camera_add(location=(7, -7, 5))  # Position de la caméra
+    bpy.ops.object.camera_add(location=(7, -7, 4))  # Position de la caméra
     camera = bpy.context.object  # Référence à l'objet caméra
-    camera.rotation_euler = (1.2, 0, 0.8)  # Orientation de la caméra
+    camera.rotation_euler = (1.13446, 0, 0.80)  # Orientation de la caméra
 
     # Définir cette caméra comme caméra active pour le rendu
     bpy.context.scene.camera = camera
+
+    # Ajout d'une lumière
+    light = bpy.data.lights.new(name="lumiere", type="POINT")
+    light_object = bpy.data.objects.new(name="object_lumiere", object_data=light)
+    light.energy = 500 # Intensité lumineuse
+    light.color = (1, 1, 1) # Couleur RGB de la lumière
+    light_object.location = (0, -5, -2)
+
+    # Lier l'objet à la scène actuelle
+    bpy.context.collection.objects.link(light_object)
 
     # Étape 3 : Sauvegarder la scène et rendre l'animation
     #bpy.ops.wm.save_mainfile(filepath="animated_scene.blend")
