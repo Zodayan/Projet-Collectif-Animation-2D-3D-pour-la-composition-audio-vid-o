@@ -7,6 +7,57 @@ import numpy as np
 
 FRAMERATE_VIDEO = 24
 
+def recupereration_objets_gltf(folder_path: str) -> list[bpy.types.Object]:
+    """
+    :param folder_path: chemin vers le dossier dans lequel récupérer les objets 3D, au format gltf/glb
+    :return: une liste constituée d'objets 3D déjà ajoutés dans la scene
+    """
+
+    liste_objets = []
+
+    # Récupération des chemins vers les objets
+    liste_path_objets = []
+    for root, dirs, files in os.walk(folder_path):
+        for file in files:
+            liste_path_objets.append(os.path.join(root, file))
+
+    i = 0
+    for path_objet in liste_path_objets:
+        # Ajoute l'objet dans la scene
+        bpy.ops.import_scene.gltf(filepath=path_objet)
+        objet = bpy.context.selected_objects[0]
+        objet.location = (i, i, i)
+        objet.rotation_euler = (0, 0, 0)
+        liste_objets.append(objet)
+        i += 1
+
+    return liste_objets
+
+
+def ajouter_camera_et_lumiere() -> None:
+    """
+    Cette fonction permet d'ajouter la caméra et la source de lumière à la scene utilisée par Blender
+    """
+
+    # Ajouter une caméra
+    bpy.ops.object.camera_add(location=(7, -7, 4))  # Position de la caméra
+    camera = bpy.context.object  # Référence à l'objet caméra
+    camera.rotation_euler = (1.13446, 0, 0.80)  # Orientation de la caméra
+
+    # Définir cette caméra comme caméra active pour le rendu
+    bpy.context.scene.camera = camera
+
+    # Ajout d'une lumière
+    light = bpy.data.lights.new(name="lumiere", type="POINT")
+    light_object = bpy.data.objects.new(name="object_lumiere", object_data=light)
+    light.energy = 500  # Intensité lumineuse
+    light.color = (1, 1, 1)  # Couleur RGB de la lumière
+    light_object.location = (0, -5, -2)
+
+    # Lier l'objet de la lumière à la scène actuelle
+    bpy.context.collection.objects.link(light_object)
+
+
 def main():
     """
     # Activer le GPU
@@ -60,45 +111,27 @@ def main():
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete()
 
-    # Ajoute l'objet "poisson.glb" dans la scene
-    filepath = "../objets3D/poisson.glb"
-    bpy.ops.import_scene.gltf(filepath=filepath)
-    objet = bpy.context.selected_objects[0]
-    objet.location = (0, 0, 0)
-    objet.rotation_euler  = (0, 0, 0)
+    liste_objets = recupereration_objets_gltf("../objets3D")
 
     # Étape 2 : Animer l'objet
     scene = bpy.context.scene
 
-    for frame in range(nb_keyframes_animation):
+    i = 0
+    for objet in liste_objets:
+        for frame in range(nb_keyframes_animation):
 
-        if frame == 0:
-            objet.location = (0, 0, int_buffer[frame]/max(int_buffer))
-            objet.keyframe_insert("location", frame=1)
-        else:
-            objet.location = (0, 0, int_buffer[frame]/max(int_buffer))
-            objet.keyframe_insert("location", frame=(frame * frame_end / nb_keyframes_animation))
+            if frame == 0:
+                objet.location = (i, i, int_buffer[frame]/max(int_buffer))
+                objet.keyframe_insert("location", frame=1)
+            else:
+                objet.location = (i, i, int_buffer[frame]/max(int_buffer))
+                objet.keyframe_insert("location", frame=(frame * frame_end / nb_keyframes_animation))
+        i+=1
 
     # On fait en sorte que l'animation ne dure que 100 frames
     bpy.context.scene.frame_end = frame_end
 
-    # Ajouter une caméra
-    bpy.ops.object.camera_add(location=(7, -7, 4))  # Position de la caméra
-    camera = bpy.context.object  # Référence à l'objet caméra
-    camera.rotation_euler = (1.13446, 0, 0.80)  # Orientation de la caméra
-
-    # Définir cette caméra comme caméra active pour le rendu
-    bpy.context.scene.camera = camera
-
-    # Ajout d'une lumière
-    light = bpy.data.lights.new(name="lumiere", type="POINT")
-    light_object = bpy.data.objects.new(name="object_lumiere", object_data=light)
-    light.energy = 500 # Intensité lumineuse
-    light.color = (1, 1, 1) # Couleur RGB de la lumière
-    light_object.location = (0, -5, -2)
-
-    # Lier l'objet à la scène actuelle
-    bpy.context.collection.objects.link(light_object)
+    ajouter_camera_et_lumiere()
 
     # Étape 3 : Sauvegarder la scène et rendre l'animation
     #bpy.ops.wm.save_mainfile(filepath="animated_scene.blend")
