@@ -33,7 +33,6 @@ def recupereration_objets_gltf(folder_path: str) -> list[bpy.types.Object]:
 
     return liste_objets
 
-
 def ajouter_camera_et_lumiere() -> None:
     """
     Cette fonction permet d'ajouter la caméra et la source de lumière à la scene utilisée par Blender
@@ -57,6 +56,65 @@ def ajouter_camera_et_lumiere() -> None:
     # Lier l'objet de la lumière à la scène actuelle
     bpy.context.collection.objects.link(light_object)
 
+def animer_objets_3d(liste_objets: list[bpy.types.Object], nb_keyframes_animation: int, int_buffer: list[int], frame_end: int) -> None:
+    """
+    Permet d'effectuer l'animation
+    """
+
+    i = 0
+    for objet in liste_objets:
+        for frame in range(nb_keyframes_animation):
+
+            if frame == 0:
+                objet.location = (i, i, int_buffer[frame] / max(int_buffer))
+                objet.keyframe_insert("location", frame=1)
+            else:
+                objet.location = (i, i, int_buffer[frame] / max(int_buffer))
+                objet.keyframe_insert("location", frame=(frame * frame_end / nb_keyframes_animation))
+        i += 1
+
+    # On fait en sorte que l'animation ne dure que 100 frames
+    bpy.context.scene.frame_end = frame_end
+
+def ajouter_audio_animation(frame_per_sec) -> None:
+    """
+    Permet de configurer et ajouter du son à la vidéo produite
+    """
+    audio_file = os.getcwd() + "/StarWarsMini.mp3"  # Chemin du fichier audio
+
+    # Activer le séquenceur pour inclure le son
+    scene = bpy.context.scene
+    scene.sequence_editor_create()
+    scene.sequence_editor.sequences.new_sound(
+        name="Background Sound",
+        filepath=audio_file,
+        channel=1,
+        frame_start=1,  # Début du son à la frame 1
+    )
+
+    # Activer le son dans le rendu
+    scene.render.ffmpeg.audio_codec = 'AAC'  # Codec audio (AAC est largement compatible)
+    scene.render.ffmpeg.audio_bitrate = 192  # Définir le bitrate audio (en kbps)
+    scene.render.ffmpeg.audio_mixrate = frame_per_sec
+    scene.render.ffmpeg.audio_channels = 'MONO'
+
+def render_animation(frame_per_sec) -> None:
+    """
+    Permet de render l'animation
+    """
+
+    scene = bpy.context.scene
+
+    # Configurer le rendu
+    bpy.context.scene.render.image_settings.file_format = 'FFMPEG'
+    # On doit récupérer le current working directory, sinon l'animation va se créer à la racine de C:\
+    bpy.context.scene.render.filepath = "".join(
+        re.split("(\\\)", (os.getcwd()))[:-1]) + "animations/animation_objet.mp4"
+    bpy.context.scene.render.ffmpeg.format = 'MPEG4'
+    bpy.context.scene.render.ffmpeg.codec = 'H264'
+
+    # Rendre l'animation
+    bpy.ops.render.render(animation=True)
 
 def main():
     """
@@ -113,57 +171,17 @@ def main():
 
     liste_objets = recupereration_objets_gltf("../objets3D")
 
-    # Étape 2 : Animer l'objet
-    scene = bpy.context.scene
+    # Animer l'objet
+    animer_objets_3d(liste_objets, nb_keyframes_animation, int_buffer, frame_end)
 
-    i = 0
-    for objet in liste_objets:
-        for frame in range(nb_keyframes_animation):
-
-            if frame == 0:
-                objet.location = (i, i, int_buffer[frame]/max(int_buffer))
-                objet.keyframe_insert("location", frame=1)
-            else:
-                objet.location = (i, i, int_buffer[frame]/max(int_buffer))
-                objet.keyframe_insert("location", frame=(frame * frame_end / nb_keyframes_animation))
-        i+=1
-
-    # On fait en sorte que l'animation ne dure que 100 frames
-    bpy.context.scene.frame_end = frame_end
-
+    # Ajouter de la caméra et de la lumière
     ajouter_camera_et_lumiere()
 
-    # Étape 3 : Sauvegarder la scène et rendre l'animation
-    #bpy.ops.wm.save_mainfile(filepath="animated_scene.blend")
-
     # Ajouter un fichier audio au séquenceur vidéo
-    audio_file = os.getcwd() + "/StarWarsMini.mp3"  # Chemin du fichier audio
+    ajouter_audio_animation(frame_per_sec)
 
-    # Activer le séquenceur pour inclure le son
-    scene.sequence_editor_create()
-    scene.sequence_editor.sequences.new_sound(
-        name="Background Sound",
-        filepath=audio_file,
-        channel=1,
-        frame_start=1,  # Début du son à la frame 1
-    )
-
-    # Configurer le rendu
-    bpy.context.scene.render.image_settings.file_format = 'FFMPEG'
-    # On doit récupérer le current working directory, sinon l'animation va se créer à la racine de C:\
-    bpy.context.scene.render.filepath = "".join(re.split("(\\\)", (os.getcwd()))[:-1]) + "animations/animation_objet.mp4"
-    bpy.context.scene.render.ffmpeg.format = 'MPEG4'
-    bpy.context.scene.render.ffmpeg.codec = 'H264'
-    #scene.cycles.device = 'GPU' # Pour utiliser le GPU
-
-    # Activer le son dans le rendu
-    scene.render.ffmpeg.audio_codec = 'AAC'  # Codec audio (AAC est largement compatible)
-    scene.render.ffmpeg.audio_bitrate = 192  # Définir le bitrate audio (en kbps)
-    scene.render.ffmpeg.audio_mixrate = frame_per_sec
-    scene.render.ffmpeg.audio_channels = 'MONO'
-
-    # Rendre l'animation
-    bpy.ops.render.render(animation=True)
+    # Permet de générer l'animation
+    render_animation(frame_per_sec)
 
 if __name__ == '__main__':
     main()
