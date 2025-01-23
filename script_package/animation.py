@@ -7,6 +7,38 @@ import numpy as np
 
 FRAMERATE_VIDEO = 24
 
+def recuperer_son_wav() -> tuple[np.ndarray, int, int]:
+    """
+    Permet de récupérer le premier son au format .wav, dans le dossier "musique"
+    :return: un tuple constitué du framerate, de la durée, du son sous forme de tableau numpy
+    """
+
+    # Ouverture du fichier wav en read-only
+    sound = wave.open("../musique/StarWarsMini.wav", "rb")
+
+    # Récupération des informations sur le son
+    frame_per_sec = sound.getframerate()
+    nb_frames = sound.getnframes()
+    sample_width = sound.getsampwidth()
+    nb_channels = sound.getnchannels()
+    sound_duration = nb_frames / frame_per_sec
+
+    # On calcule le nombre d'octets présents dans le son
+    nb_bytes = nb_frames * nb_channels * sample_width
+
+    # Récupération du son sous forme de tableau d'octets
+    buffer = sound.readframes(sound.getnframes())
+
+    # On ferme le fichier ouvert précédemment pour libérer la ressource
+    sound.close()
+
+    # Transformation du buffer d'entiers 8-bits en buffer d'entiers 16-bits signés
+    buffer = np.frombuffer(buffer, dtype=np.int16)
+
+    return buffer, sound_duration, frame_per_sec
+
+
+
 def recupereration_objets_gltf(folder_path: str) -> list[bpy.types.Object]:
     """
     :param folder_path: chemin vers le dossier dans lequel récupérer les objets 3D, au format gltf/glb
@@ -56,31 +88,40 @@ def ajouter_camera_et_lumiere() -> None:
     # Lier l'objet de la lumière à la scène actuelle
     bpy.context.collection.objects.link(light_object)
 
-def animer_objets_3d(liste_objets: list[bpy.types.Object], nb_keyframes_animation: int, int_buffer: list[int], frame_end: int) -> None:
+def animer_objets_3d(liste_objets: list[bpy.types.Object], buffer_son: np.ndarray ,duree_son: int, framerate_son: int) -> None:
     """
     Permet d'effectuer l'animation
     """
+
+    # Définition des paramètres d'animation en fonction de la musique
+    nb_keyframes_animation = 50
+    frame_end = int(duree_son * FRAMERATE_VIDEO)  # n° de la frame de fin pour l'animation
+
+    # Définition du buffer contenant les valeurs d'intensité des échantillons du son au moment des keyframes (d'amplitude frame_per_sec et centré en 0)
+    int_buffer = [(buffer_son[i] / 256 * framerate_son) - framerate_son / 2 for i in
+                  range(0, len(buffer_son), len(buffer_son) // nb_keyframes_animation)]
 
     i = 0
     for objet in liste_objets:
         for frame in range(nb_keyframes_animation):
 
             if frame == 0:
-                objet.location = (i, i, int_buffer[frame] / max(int_buffer))
+                objet.location = (i - len(liste_objets)//2, i - len(liste_objets)//2, int_buffer[frame] / max(int_buffer))
                 objet.keyframe_insert("location", frame=1)
             else:
-                objet.location = (i, i, int_buffer[frame] / max(int_buffer))
+                objet.location = (i - len(liste_objets)//2, i - len(liste_objets)//2, int_buffer[frame] / max(int_buffer))
                 objet.keyframe_insert("location", frame=(frame * frame_end / nb_keyframes_animation))
         i += 1
 
     # On fait en sorte que l'animation ne dure que 100 frames
     bpy.context.scene.frame_end = frame_end
 
-def ajouter_audio_animation(frame_per_sec) -> None:
+def ajouter_audio_animation(frame_per_sec: int, sound_name: str) -> None:
     """
     Permet de configurer et ajouter du son à la vidéo produite
     """
-    audio_file = os.getcwd() + "/StarWarsMini.mp3"  # Chemin du fichier audio
+    audio_file = "".join(
+        re.split("(\\\)", (os.getcwd()))[:-1]) + f"musique/{sound_name}"
 
     # Activer le séquenceur pour inclure le son
     scene = bpy.context.scene
@@ -117,49 +158,12 @@ def render_animation(frame_per_sec) -> None:
     bpy.ops.render.render(animation=True)
 
 def main():
-    """
-    # Activer le GPU
-    bpy.context.scene.render.engine = 'CYCLES'
-    bpy.context.preferences.addons['cycles'].preferences.compute_device_type = 'OPTIX'  # Ou 'CUDA'
-    bpy.context.preferences.addons['cycles'].preferences.get_devices()
-
-    # Activer tous les GPU disponibles
-    for device in bpy.context.preferences.addons['cycles'].preferences.devices:
-        device.use = True
-    """
 
     #####################################
     # PARTIE RECUPERATION DE LA MUSIQUE #
     #####################################
 
-    # Ouverture du fichier wav en read-only
-    sound = wave.open("StarWarsMini.wav", "rb")
-
-    # Récupération des informations sur le son
-    frame_per_sec = sound.getframerate()
-    nb_frames = sound.getnframes()
-    sample_width = sound.getsampwidth()
-    nb_channels = sound.getnchannels()
-    sound_duration = nb_frames / frame_per_sec
-
-    # On calcule le nombre d'octets présents dans le son
-    nb_bytes = nb_frames * nb_channels * sample_width
-
-    # Récupération du son sous forme de tableau d'octets
-    buffer = sound.readframes(sound.getnframes())
-
-    # On ferme le fichier ouvert précédemment pour libérer la ressource
-    sound.close()
-
-    # Transformation du buffer d'entiers 8-bits en buffer d'entiers 16-bits signés
-    buffer = np.frombuffer(buffer, dtype=np.int16)
-
-    # Définition des paramètres d'animation en fonction de la musique
-    nb_keyframes_animation = 50
-    frame_end =  int(sound_duration * FRAMERATE_VIDEO) # n° de la frame de fin pour l'animation
-    # Définition du buffer contenant les valeurs d'intensité des échantillons du son au moment des keyframes (d'amplitude frame_per_sec et centré en 0)
-    int_buffer = [(buffer[i] / 256 * frame_per_sec) - frame_per_sec / 2 for i in
-                  range(0, len(buffer), len(buffer) // nb_keyframes_animation)]
+    buffer_son, duree_son, framerate_son = recuperer_son_wav()
 
     ####################
     # PARTIE ANIMATION #
@@ -172,16 +176,16 @@ def main():
     liste_objets = recupereration_objets_gltf("../objets3D")
 
     # Animer l'objet
-    animer_objets_3d(liste_objets, nb_keyframes_animation, int_buffer, frame_end)
+    animer_objets_3d(liste_objets, buffer_son, duree_son, framerate_son)
 
     # Ajouter de la caméra et de la lumière
     ajouter_camera_et_lumiere()
 
     # Ajouter un fichier audio au séquenceur vidéo
-    ajouter_audio_animation(frame_per_sec)
+    ajouter_audio_animation(framerate_son, "StarWarsMini.wav")
 
     # Permet de générer l'animation
-    render_animation(frame_per_sec)
+    render_animation(framerate_son)
 
 if __name__ == '__main__':
     main()
