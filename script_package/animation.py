@@ -4,15 +4,18 @@ import bpy
 import os
 import wave
 import numpy as np
+from scipy.fftpack import fft
+from scipy.io import wavfile
 
 FRAMERATE_VIDEO = 24
 
-def recuperer_son_wav() -> tuple[np.ndarray, int, int]:
+def recuperer_son_wav() -> tuple[np.ndarray, float, int]:
     """
     Permet de récupérer le premier son au format .wav, dans le dossier "musique"
     :return: un tuple constitué du framerate, de la durée, du son sous forme de tableau numpy
     """
 
+    """
     # Ouverture du fichier wav en read-only
     sound = wave.open("../musique/StarWarsMini.wav", "rb")
 
@@ -36,8 +39,31 @@ def recuperer_son_wav() -> tuple[np.ndarray, int, int]:
     buffer = np.frombuffer(buffer, dtype=np.int16)
 
     return buffer, sound_duration, frame_per_sec
+    """
 
+    # On essaye avec wavfile de scipy
+    audio_file_path = os.path.join(os.path.dirname(__file__), "../musique/StarWarsMini.wav")
+    fs, data = wavfile.read(audio_file_path)
+    audio = data # si le son a plusieurs tracks, il faut faire audio = data.T[0]
+    AUDIO_LENGTH = len(audio)/fs
 
+    # On applique la FFT (Fast Fourier Transformation), qui va permettre de
+    fft_array = np.fft.fft(audio)
+    xf = np.fft.fftfreq(len(audio), 1 / fs)  # Ensemble des valeurs de fréquences prises par fft_array
+
+    # On applique des modifications au son
+    # On va garder uniquement les fréquences ≤ 1000 Hz
+    fft_array[np.abs(xf) > 1000] = 0
+
+    # On va inverser la FFT pour revenir sur un array de son utilisable
+    reversed_fft_array = np.fft.ifft(fft_array)
+    reversed_fft_array = np.round(reversed_fft_array.real).astype(np.int16) # On convertit le tableau en entiers réels
+
+    # On enregistre le son édité pour tester
+    edited_audio_file_path = os.path.join(os.path.dirname(__file__), "../musique/edited.wav")
+    wavfile.write(edited_audio_file_path, fs, reversed_fft_array) # Important de mettre en type np.int16 et pas simplement int
+
+    return reversed_fft_array, AUDIO_LENGTH, fs
 
 def recupereration_objets_gltf(folder_path: str) -> list[bpy.types.Object]:
     """
@@ -98,18 +124,18 @@ def animer_objets_3d(liste_objets: list[bpy.types.Object], buffer_son: np.ndarra
     frame_end = int(duree_son * FRAMERATE_VIDEO)  # n° de la frame de fin pour l'animation
 
     # Définition du buffer contenant les valeurs d'intensité des échantillons du son au moment des keyframes (d'amplitude frame_per_sec et centré en 0)
-    int_buffer = [(buffer_son[i] / 256 * framerate_son) - framerate_son / 2 for i in
+    int_buffer = [(abs(buffer_son[i]) / 256 * framerate_son) - framerate_son / 2 for i in
                   range(0, len(buffer_son), len(buffer_son) // nb_keyframes_animation)]
 
     i = 0
     for objet in liste_objets:
         for frame in range(nb_keyframes_animation):
+            objet.location = (
+            i - len(liste_objets) // 2, i - len(liste_objets) // 2, (-1) ** i * int_buffer[frame] / max(int_buffer))
 
             if frame == 0:
-                objet.location = (i - len(liste_objets)//2, i - len(liste_objets)//2, int_buffer[frame] / max(int_buffer))
                 objet.keyframe_insert("location", frame=1)
             else:
-                objet.location = (i - len(liste_objets)//2, i - len(liste_objets)//2, int_buffer[frame] / max(int_buffer))
                 objet.keyframe_insert("location", frame=(frame * frame_end / nb_keyframes_animation))
         i += 1
 
