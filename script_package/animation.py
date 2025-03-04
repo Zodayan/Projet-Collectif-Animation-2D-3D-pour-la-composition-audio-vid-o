@@ -2,68 +2,56 @@ import re
 
 import bpy
 import os
-import wave
 import numpy as np
-from scipy.fftpack import fft
 from scipy.io import wavfile
 
 FRAMERATE_VIDEO = 24
 
-def recuperer_son_wav() -> tuple[np.ndarray, float, int]:
+def recuperer_son_depuis_plage_frequences(son: np.ndarray, freq1: int | None, freq2: int | None) -> np.ndarray:
+    """
+    Cette fonction permet de récupérer une version réduite du son avec uniquement les fréquences de la plage indiquée
+    :param son: Buffer représentant le son.
+    :param freq1: Borne inférieur de la plage de fréquences. Une valeur de type None sur cette borne permet de l'ignorer.
+    :param freq2: Borne supérieur de la plage de fréquences. Une valeur de type None sur cette borne permet de l'ignorer.
+    :return: Le buffer de son recomposé avec les fréquences sonores de la plage [freq1, freq2].
+    """
+
+
+
+def recuperer_son_wav(path_son: str) -> tuple[np.ndarray, float, int]:
     """
     Permet de récupérer le premier son au format .wav, dans le dossier "musique"
+    :param path_son:  doit être le chemin absolu vers l'emplacement le fichier son. Le fichier son doit être au format wav
     :return: un tuple constitué du framerate, de la durée, du son sous forme de tableau numpy
     """
 
-    """
-    # Ouverture du fichier wav en read-only
-    sound = wave.open("../musique/StarWarsMini.wav", "rb")
+    # On récupère le fichier wav avec scipy sous forme d'un buffer
+    sample_rate, buffer = wavfile.read(path_son)
 
-    # Récupération des informations sur le son
-    frame_per_sec = sound.getframerate()
-    nb_frames = sound.getnframes()
-    sample_width = sound.getsampwidth()
-    nb_channels = sound.getnchannels()
-    sound_duration = nb_frames / frame_per_sec
+    # si le son a plusieurs tracks, il faut faire son = buffer.T[0]
+    son = buffer
+    longueur_son = len(son)/sample_rate
 
-    # On calcule le nombre d'octets présents dans le son
-    nb_bytes = nb_frames * nb_channels * sample_width
-
-    # Récupération du son sous forme de tableau d'octets
-    buffer = sound.readframes(sound.getnframes())
-
-    # On ferme le fichier ouvert précédemment pour libérer la ressource
-    sound.close()
-
-    # Transformation du buffer d'entiers 8-bits en buffer d'entiers 16-bits signés
-    buffer = np.frombuffer(buffer, dtype=np.int16)
-
-    return buffer, sound_duration, frame_per_sec
-    """
-
-    # On essaye avec wavfile de scipy
-    audio_file_path = os.path.join(os.path.dirname(__file__), "../musique/StarWarsMini.wav")
-    fs, data = wavfile.read(audio_file_path)
-    audio = data # si le son a plusieurs tracks, il faut faire audio = data.T[0]
-    AUDIO_LENGTH = len(audio)/fs
-
-    # On applique la FFT (Fast Fourier Transformation), qui va permettre de
-    fft_array = np.fft.fft(audio)
-    xf = np.fft.fftfreq(len(audio), 1 / fs)  # Ensemble des valeurs de fréquences prises par fft_array
+    # On applique la FFT (Fast Fourier Transformation), qui va permettre d'extraire les fréquences présentes dans le son
+    tableau_fft = np.fft.fft(son)
+    # Tableau des fréquences associées aux valeurs de tableau_fft
+    frequences = np.fft.fftfreq(len(son), 1 / sample_rate)
 
     # On applique des modifications au son
     # On va garder uniquement les fréquences ≤ 1000 Hz
-    fft_array[np.abs(xf) > 1000] = 0
+    tableau_fft[np.abs(frequences) > 1000] = 0
 
     # On va inverser la FFT pour revenir sur un array de son utilisable
-    reversed_fft_array = np.fft.ifft(fft_array)
-    reversed_fft_array = np.round(reversed_fft_array.real).astype(np.int16) # On convertit le tableau en entiers réels
+    son_recompose = np.fft.ifft(tableau_fft)
+    son_recompose = np.round(son_recompose.real).astype(np.int16) # On convertit le tableau en entiers réels
 
+    """
     # On enregistre le son édité pour tester
     edited_audio_file_path = os.path.join(os.path.dirname(__file__), "../musique/edited.wav")
-    wavfile.write(edited_audio_file_path, fs, reversed_fft_array) # Important de mettre en type np.int16 et pas simplement int
+    wavfile.write(edited_audio_file_path, sample_rate, son_recompose) # Important de mettre en type np.int16 et pas simplement int
+    """
 
-    return reversed_fft_array, AUDIO_LENGTH, fs
+    return son_recompose, longueur_son, sample_rate
 
 def recupereration_objets_gltf(folder_path: str) -> list[bpy.types.Object]:
     """
@@ -114,9 +102,13 @@ def ajouter_camera_et_lumiere() -> None:
     # Lier l'objet de la lumière à la scène actuelle
     bpy.context.collection.objects.link(light_object)
 
-def animer_objets_3d(liste_objets: list[bpy.types.Object], buffer_son: np.ndarray ,duree_son: int, framerate_son: int) -> None:
+def animer_objets_3d(liste_objets: list[bpy.types.Object], buffer_son: np.ndarray ,duree_son: float, framerate_son: int) -> None:
     """
     Permet d'effectuer l'animation
+    :param liste_objets: la liste des objets 3D à animer.
+    :param buffer_son: buffer représentant le son sur lequel l'animation se base.
+    :param duree_son: durée du son (en secondes).
+    :param framerate_son: framerate du son en samples/seconde.
     """
 
     # Définition des paramètres d'animation en fonction de la musique
@@ -142,19 +134,19 @@ def animer_objets_3d(liste_objets: list[bpy.types.Object], buffer_son: np.ndarra
     # On fait en sorte que l'animation ne dure que 100 frames
     bpy.context.scene.frame_end = frame_end
 
-def ajouter_audio_animation(frame_per_sec: int, sound_name: str) -> None:
+def ajouter_audio_animation(frame_per_sec: int, path_son: str) -> None:
     """
     Permet de configurer et ajouter du son à la vidéo produite
+    :param frame_per_sec: indique le framerate de l'animation
+    :param path_son: indique le chemin absolu vers le son. Le son doit être au format wav.
     """
-    audio_file = "".join(
-        re.split("(\\\)", (os.getcwd()))[:-1]) + f"musique/{sound_name}"
 
     # Activer le séquenceur pour inclure le son
     scene = bpy.context.scene
     scene.sequence_editor_create()
     scene.sequence_editor.sequences.new_sound(
         name="Background Sound",
-        filepath=audio_file,
+        filepath=path_son,
         channel=1,
         frame_start=1,  # Début du son à la frame 1
     )
@@ -189,7 +181,9 @@ def main():
     # PARTIE RECUPERATION DE LA MUSIQUE #
     #####################################
 
-    buffer_son, duree_son, framerate_son = recuperer_son_wav()
+    path_son = os.path.join(os.path.dirname(__file__), "../musique/StarWarsMini.wav")
+
+    buffer_son, duree_son, framerate_son = recuperer_son_wav(path_son)
 
     ####################
     # PARTIE ANIMATION #
@@ -208,7 +202,7 @@ def main():
     ajouter_camera_et_lumiere()
 
     # Ajouter un fichier audio au séquenceur vidéo
-    ajouter_audio_animation(framerate_son, "StarWarsMini.wav")
+    ajouter_audio_animation(framerate_son, path_son)
 
     # Permet de générer l'animation
     render_animation(framerate_son)
