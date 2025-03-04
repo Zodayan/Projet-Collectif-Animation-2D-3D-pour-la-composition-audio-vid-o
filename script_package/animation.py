@@ -7,15 +7,40 @@ from scipy.io import wavfile
 
 FRAMERATE_VIDEO = 24
 
-def recuperer_son_depuis_plage_frequences(son: np.ndarray, freq1: int | None, freq2: int | None) -> np.ndarray:
+def recuperer_son_depuis_plage_frequences(son: np.ndarray, sample_rate: int, freq1: int | None, freq2: int | None) -> np.ndarray:
     """
     Cette fonction permet de récupérer une version réduite du son avec uniquement les fréquences de la plage indiquée
     :param son: Buffer représentant le son.
     :param freq1: Borne inférieur de la plage de fréquences. Une valeur de type None sur cette borne permet de l'ignorer.
     :param freq2: Borne supérieur de la plage de fréquences. Une valeur de type None sur cette borne permet de l'ignorer.
     :return: Le buffer de son recomposé avec les fréquences sonores de la plage [freq1, freq2].
+    Si freq1 = None et freq2 = None, alors on renvoie simplement le son de base
     """
 
+    if freq1 is None and freq2 is None:
+        return son
+
+    # On applique la FFT (Fast Fourier Transformation), qui va permettre d'extraire les fréquences présentes dans le son
+    tableau_fft = np.fft.fft(son)
+    # Tableau des fréquences associées aux valeurs de tableau_fft
+    frequences = np.fft.fftfreq(len(son), 1 / sample_rate)
+
+    # On applique des modifications au son
+    # On ne garde que les fréquences présentes dans l'intervalle [0, freq2]
+    if freq1 is None:
+        tableau_fft[ (np.abs(frequences) > freq2) ] = 0
+    # On ne garde que les fréquences présentes dans l'intervalle [freq1, +infini)
+    elif freq2 is None:
+        tableau_fft[ (freq1 > np.abs(frequences)) ] = 0
+    # On ne garde que les fréquences entre freq1 et freq2
+    else:
+        tableau_fft[ (np.abs(frequences) < freq1) or (np.abs(frequences) > freq2) ] = 0
+
+    # On va inverser la FFT pour revenir sur un array de son utilisable
+    son_recompose = np.fft.ifft(tableau_fft)
+    son_recompose = np.round(son_recompose.real).astype(np.int16)  # On convertit le tableau en entiers réels
+
+    return son_recompose
 
 
 def recuperer_son_wav(path_son: str) -> tuple[np.ndarray, float, int]:
@@ -32,18 +57,7 @@ def recuperer_son_wav(path_son: str) -> tuple[np.ndarray, float, int]:
     son = buffer
     longueur_son = len(son)/sample_rate
 
-    # On applique la FFT (Fast Fourier Transformation), qui va permettre d'extraire les fréquences présentes dans le son
-    tableau_fft = np.fft.fft(son)
-    # Tableau des fréquences associées aux valeurs de tableau_fft
-    frequences = np.fft.fftfreq(len(son), 1 / sample_rate)
-
-    # On applique des modifications au son
-    # On va garder uniquement les fréquences ≤ 1000 Hz
-    tableau_fft[np.abs(frequences) > 1000] = 0
-
-    # On va inverser la FFT pour revenir sur un array de son utilisable
-    son_recompose = np.fft.ifft(tableau_fft)
-    son_recompose = np.round(son_recompose.real).astype(np.int16) # On convertit le tableau en entiers réels
+    son_faibles_frequences = recuperer_son_depuis_plage_frequences(son, sample_rate, None, 1000)
 
     """
     # On enregistre le son édité pour tester
@@ -51,7 +65,7 @@ def recuperer_son_wav(path_son: str) -> tuple[np.ndarray, float, int]:
     wavfile.write(edited_audio_file_path, sample_rate, son_recompose) # Important de mettre en type np.int16 et pas simplement int
     """
 
-    return son_recompose, longueur_son, sample_rate
+    return son_faibles_frequences, longueur_son, sample_rate
 
 def recupereration_objets_gltf(folder_path: str) -> list[bpy.types.Object]:
     """
