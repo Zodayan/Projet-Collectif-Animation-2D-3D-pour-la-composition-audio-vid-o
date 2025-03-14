@@ -1,4 +1,4 @@
-Installation (pas oublier d'activer l'environnement perso moi ma commande c'est venv\Scripts\activate):
+#Installation (pas oublier d'activer l'environnement perso moi ma commande c'est venv\Scripts\activate):
 
 pip install -r requirements.txt
 
