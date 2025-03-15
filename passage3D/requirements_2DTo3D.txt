@@ -1,0 +1,4 @@
+torchvision
+setuptools<65
+scipy>=1.11.4
+imageio>=2.33,!=2.35.0

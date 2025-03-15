@@ -10,8 +10,6 @@ Original file is located at
 Code basé sur OpenCV: Il s'agit d'une méthode classique de traitement d'image fournies par OpenCV. Cette méthode sépare les pixels d'une image en deux groupes (objet et fond) selon une valeur de seuil. Ici, un seuil fixe est utilisé : cv2.threshold.
 """
 
-!pip install opencv-python matplotlib numpy
-
 # Importation des bibliothèques nécessaires
 from google.colab import files
 import cv2
