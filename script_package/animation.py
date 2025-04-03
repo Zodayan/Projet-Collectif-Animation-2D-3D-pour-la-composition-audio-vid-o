@@ -1,6 +1,5 @@
 import math
 import re
-import time
 
 import bpy
 import os
@@ -171,7 +170,7 @@ def animer_objets_3d(liste_objets: list[bpy.types.Object], buffer_son: np.ndarra
                               (-1) ** i * buffer[frame] / max(abs(buffer)) )
 
             # On fait bouger les modèles sur un angle entre -90° et +90° autours des axes Y et Z.
-            objet.rotation_euler = (0,
+            objet.rotation_euler = (math.radians( 90 ),
                                     math.radians( 90 * buffer_hautes_frequences[frame] / max(abs(buffer_hautes_frequences))),
                                     math.radians( 90 * buffer_faibles_frequences[frame] / max(abs(buffer_faibles_frequences))))
 
@@ -197,7 +196,7 @@ def ajouter_audio_animation(frame_per_sec: int, path_son: str) -> None:
     scene = bpy.context.scene
     scene.sequence_editor_create()
     scene.sequence_editor.sequences.new_sound(
-        name="Background Sound",
+        name="Music",
         filepath=path_son,
         channel=1,
         frame_start=1,  # Début du son à la frame 1
@@ -234,6 +233,7 @@ def main():
     #####################################
 
     path_son = "../musique/StarWarsMini.wav"
+    path_son = os.path.abspath(path_son)
 
     buffer_son, duree_son, framerate_son = recuperer_son_wav(path_son)
 
